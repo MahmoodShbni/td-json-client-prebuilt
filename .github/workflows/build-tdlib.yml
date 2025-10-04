@@ -1,8 +1,16 @@
+name: tdlib-build
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch: {}   # ← اجرا فقط دستی از UI. وجود این خط «لازم» است.
+
 jobs:
   build-linux-x64:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-22.04           # Runner میزبان
     container:
-      image: ubuntu:20.04   # <<< مهم: بیلد داخل 20.04
+      image: ubuntu:20.04           # محیط بیلد (GLIBC 2.31)
     steps:
       - uses: actions/checkout@v4
 
@@ -17,11 +25,11 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y \
             make git cmake gperf zip php-cli php-xml \
-            zlib1g-dev libssl-dev \
-            gcc-10 g++-10
+            zlib1g-dev libssl-dev gcc-10 g++-10
           update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
           update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
-          gcc --version && g++ --version && php -m | grep -i xml || true
+          gcc --version && g++ --version
+          php -m | grep -i xml || true
 
       - name: Clone TDLib
         run: |
@@ -48,7 +56,6 @@ jobs:
           cmake --build . --target install
           cd ..
           php SplitSource.php --undo
-          # نشان دادن وابستگی‌ها برای اطمینان
           ldd tdlib/lib/libtdjson.so || true
 
       - name: Zip Linux lib
