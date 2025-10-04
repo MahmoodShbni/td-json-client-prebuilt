@@ -1,11 +1,9 @@
 name: tdlib-build
 
-# برای ساخت Release با GITHUB_TOKEN
 permissions:
   contents: write
 
 on:
-  # فقط اجرای دستی از UI
   workflow_dispatch:
 
 jobs:
@@ -20,10 +18,20 @@ jobs:
           filename: '.github/workflows/td-version.json'
           prefix: td
 
-      - name: Setup (packages)
+      - name: Setup (packages & toolchains)
         run: |
           sudo apt-get update
-          sudo apt-get install -y make git zlib1g-dev libssl-dev gperf php-cli cmake g++ zip
+          # g++-10 برای C++17 پایدارتر است؛ php-xml برای SplitSource.php لازم است
+          sudo apt-get install -y \
+            make git cmake gperf zip php-cli php-xml \
+            zlib1g-dev libssl-dev \
+            gcc-10 g++-10
+          # سوییچ کامپایلر پیش‌فرض به gcc/g++-10
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+          gcc --version
+          g++ --version
+          php -m | grep -i xml || true
 
       - name: Clone TDLib
         run: |
@@ -33,6 +41,9 @@ jobs:
           git show --summary
 
       - name: Build TDLib (Linux)
+        env:
+          CC: gcc
+          CXX: g++
         run: |
           cd td
           rm -rf build
