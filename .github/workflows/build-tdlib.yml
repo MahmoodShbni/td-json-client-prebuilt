@@ -1,14 +1,8 @@
-name: tdlib-build
-
-permissions:
-  contents: write
-
-on:
-  workflow_dispatch:
-
 jobs:
   build-linux-x64:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:20.04   # <<< مهم: بیلد داخل 20.04
     steps:
       - uses: actions/checkout@v4
 
@@ -20,18 +14,14 @@ jobs:
 
       - name: Setup (packages & toolchains)
         run: |
-          sudo apt-get update
-          # g++-10 برای C++17 پایدارتر است؛ php-xml برای SplitSource.php لازم است
-          sudo apt-get install -y \
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
             make git cmake gperf zip php-cli php-xml \
             zlib1g-dev libssl-dev \
             gcc-10 g++-10
-          # سوییچ کامپایلر پیش‌فرض به gcc/g++-10
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
-          gcc --version
-          g++ --version
-          php -m | grep -i xml || true
+          update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
+          update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+          gcc --version && g++ --version && php -m | grep -i xml || true
 
       - name: Clone TDLib
         run: |
@@ -40,16 +30,17 @@ jobs:
           git checkout ${{ env.td_commit_hash }}
           git show --summary
 
-      - name: Build TDLib (Linux)
+      - name: Build TDLib (Linux, GLIBC 2.31)
         env:
           CC: gcc
           CXX: g++
         run: |
           cd td
-          rm -rf build
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=../tdlib ..
+          rm -rf build && mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX:PATH=../tdlib \
+                -DCMAKE_CXX_FLAGS="-static-libstdc++ -static-libgcc" \
+                ..
           cmake --build . --target prepare_cross_compiling
           cd ..
           php SplitSource.php
@@ -57,6 +48,8 @@ jobs:
           cmake --build . --target install
           cd ..
           php SplitSource.php --undo
+          # نشان دادن وابستگی‌ها برای اطمینان
+          ldd tdlib/lib/libtdjson.so || true
 
       - name: Zip Linux lib
         run: |
