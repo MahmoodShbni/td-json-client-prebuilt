@@ -1,0 +1,73 @@
+name: tdlib-build
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-linux-x64:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JSON to variables
+        uses: rgarcia-phi/json-to-variables@v1.1.0
+        with:
+          filename: '.github/workflows/td-version.json'
+          prefix: td
+
+      - name: Setup (packages & toolchains)
+        run: |
+          sudo apt-get update
+          # g++-10 برای C++17 پایدارتر است؛ php-xml برای SplitSource.php لازم است
+          sudo apt-get install -y \
+            make git cmake gperf zip php-cli php-xml \
+            zlib1g-dev libssl-dev \
+            gcc-10 g++-10
+          # سوییچ کامپایلر پیش‌فرض به gcc/g++-10
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+          gcc --version
+          g++ --version
+          php -m | grep -i xml || true
+
+      - name: Clone TDLib
+        run: |
+          git clone https://github.com/tdlib/td.git
+          cd td
+          git checkout ${{ env.td_commit_hash }}
+          git show --summary
+
+      - name: Build TDLib (Linux)
+        env:
+          CC: gcc
+          CXX: g++
+        run: |
+          cd td
+          rm -rf build
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=../tdlib ..
+          cmake --build . --target prepare_cross_compiling
+          cd ..
+          php SplitSource.php
+          cd build
+          cmake --build . --target install
+          cd ..
+          php SplitSource.php --undo
+
+      - name: Zip Linux lib
+        run: |
+          cd td/tdlib/lib
+          zip libtdjson.zip libtdjson.so
+
+      - name: Release (Linux x64)
+        uses: ncipollo/release-action@v1
+        with:
+          tag: linux-x64-${{ env.td_version }}-${{ env.td_commit_hash }}
+          name: Linux x64 ${{ env.td_version }}-${{ env.td_commit_hash }}
+          body: https://github.com/tdlib/td/tree/${{ env.td_commit_hash }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: 'td/tdlib/lib/libtdjson.zip'
